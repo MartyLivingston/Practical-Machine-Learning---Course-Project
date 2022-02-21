@@ -1,0 +1,138 @@
+---
+title: "Practical Machine Learning - Course Project"
+---
+
+Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Data 
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Initailizing
+
+```{r}
+set.seed(42)
+library(caret)
+library(rattle)
+library(kernlab)
+library(corrplot)
+
+TrainSet <- read.csv("./pml-training.csv")
+TestSet <- read.csv("./pml-testing.csv")
+
+dim(TrainSet)
+dim(TestSet)
+```
+
+The training set has 160 variables and 19622 observations, and the test set has the same variables and 20 observations.
+
+## Data Cleaning
+
+Let's remove unnecessary variables, with N/A variables to start.
+
+```{r}
+TrainSet <- TrainSet[,colMeans(is.na(TrainSet)) < .9] #remove na columns
+TrainSet <- TrainSet[,-c(1:7)] #remove metadata which won't affect the outcome
+```
+
+Remove near zero variance variables.
+
+```{r}
+RemovedColumns <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[,-RemovedColumns]
+dim(TrainSet)
+```
+
+Now we split the training set into a validation and a lower training set.
+
+```{r}
+TrainSplit <- createDataPartition(y=TrainSet$classe, p=0.7, list=F)
+LowerTrainSet <- TrainSet[TrainSplit,]
+ValidationSet <- TrainSet[-TrainSplit,]
+```
+
+
+## Models
+
+Set up control for 3-fold cross validation.
+
+```{r}
+Control <- trainControl(method="cv", number=3, verboseIter=F)
+```
+
+We create a Decision Tree model:
+
+```{r}
+DecisionTreeModel <- train(classe~., data=LowerTrainSet, method="rpart", trControl = Control, tuneLength = 5)
+fancyRpartPlot(DecisionTreeModel$finalModel)
+```
+
+Then we use the Decision Tree model for predictions:
+
+```{r}
+DecisionTreePredictions <- predict(DecisionTreeModel, ValidationSet)
+DecisionTreeConfustionMatrix <- confusionMatrix(DecisionTreePredictions, factor(ValidationSet$classe))
+DecisionTreeConfustionMatrix
+```
+
+Next we use a Gradient Boosted Trees model:
+
+```{r}
+GradientBoostedTreesModel <- mod_gbm <- train(classe~., data=LowerTrainSet, method="gbm", trControl = Control, tuneLength = 5, verbose = F)
+```
+
+Then we use the Gradient Boosted Trees model for predictions:
+
+```{r}
+GradientBoostedTreesPredictions <- predict(GradientBoostedTreesModel, ValidationSet)
+GradientBoostedTreesConfustionMatrix <- confusionMatrix(GradientBoostedTreesPredictions, factor(ValidationSet$classe))
+GradientBoostedTreesConfustionMatrix
+```
+
+Next we use a Support Vector Machine model:
+
+```{r}
+SupportVectorMachineModel <- train(classe~., data=LowerTrainSet, method="svmLinear", trControl = Control, tuneLength = 5, verbose = F)
+```
+
+Then we use the Support Vector Machine model for predictions:
+
+```{r}
+SupportVectorMachinePredictions <- predict(SupportVectorMachineModel, ValidationSet)
+SupportVectorMachineConfustionMatrix <- confusionMatrix(SupportVectorMachinePredictions, factor(ValidationSet$classe))
+SupportVectorMachineConfustionMatrix
+```
+
+
+## Results
+Decision Tree: - Accuracy: 0.5402 
+Gradient Boosted Trees - Accuracy: 0.9925
+Support Vector Machine - Accuracy: 0.7822
+
+The best model is the Gradient Boosted Trees with accuracy of 0.9925
+
+## Test Set Predictions
+```{r}
+TestSetPredictions <- predict(GradientBoostedTreesModel, TestSet)
+print(TestSetPredictions)
+```
+
+## Appendix
+
+Plotting the models
+
+Decision Tree
+```{r}
+plot(DecisionTreeModel)
+```
+
+Gradient Boosted Trees Model
+```{r}
+plot(GradientBoostedTreesModel)
+```
